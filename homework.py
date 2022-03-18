@@ -1,6 +1,8 @@
+import json
 import logging
 import os
 import time
+from http import HTTPStatus
 
 import requests
 import telegram
@@ -42,8 +44,12 @@ logger.addHandler(
 
 def send_message(bot, message):
     """Отправляет сообщение в Телеграмм."""
-    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    logger.info('Сообщение отправлено')
+    try:
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+        logger.info('Сообщение отправлено')
+    except telegram.TelegramError as telegram_error:
+        logger.error(
+            f'Сообщение не отправлено: {telegram_error}')
 
 
 def get_api_answer(current_timestamp):
@@ -52,15 +58,20 @@ def get_api_answer(current_timestamp):
     params = {'from_date': timestamp}
     try:
         response = requests.get(url=ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             logger.error(f'Ресурс недоступен, ответ {response.status_code}')
             raise StatusCodeError(
                 f'Ресурс недоступен, ответ {response.status_code}'
             )
+        return response.json()
     except RequestException as error:
         logger.error(f'ошибка подключения {error}')
         raise RequestExceptionError(f'ошибка подключения {error}')
-    return response.json()
+    except json.JSONDecodeError as value_error:
+        logger.error(f'Код ответа API (ValueError): {value_error}')
+        raise json.JSONDecodeError(
+            f'Код ответа API (ValueError): {value_error}'
+        )
 
 
 def check_response(response):
@@ -84,21 +95,19 @@ def check_response(response):
             'Неверный тип данных: ключ "homeworks" '
             'должен содержать список'
         )
-    checked_response = response.get('homeworks')
-    print(checked_response)
-    return checked_response
+    return homeworks
 
 
 def parse_status(homework):
     """Отслеживание статуса домашней работы."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
-    if homework_status not in HOMEWORK_STATUSES:
-        logger.error('Неизвестный статус работы')
-        raise KeyError('Неизвестный статус работы')
     if 'homework_name' not in homework:
         logger.error('Отсутствует ожидаемый ключ "homework_name"')
         raise KeyError('Отсутствует ожидаемый ключ "homework_name"')
+    if homework_status not in HOMEWORK_STATUSES:
+        logger.error('Неизвестный статус работы')
+        raise KeyError('Неизвестный статус работы')
     verdict = HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -129,7 +138,9 @@ def main():
                 logger.info('Работа пока не принята на проверку')
             if status_homework != homeworks[0].get('status'):
                 send_message(bot, parse_status(homeworks[0]))
-                status_homework = homeworks[0].get('status')
+                # не поняла замечание про выборку статусов.
+                # здесь предполагается не проверка, а сравнение,
+                # чтобы понять, что статус изменился
             else:
                 logger.debug('Пока без изменений')
             current_timestamp = response['current_date']
