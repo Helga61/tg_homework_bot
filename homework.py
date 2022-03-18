@@ -85,6 +85,7 @@ def check_response(response):
             'должен содержать список'
         )
     checked_response = response.get('homeworks')
+    print(checked_response)
     return checked_response
 
 
@@ -124,6 +125,8 @@ def main():
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
+            if len(homeworks) == 0:
+                logger.info('Работа пока не принята на проверку')
             if status_homework != homeworks[0].get('status'):
                 send_message(bot, parse_status(homeworks[0]))
                 status_homework = homeworks[0].get('status')
@@ -135,8 +138,6 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             time.sleep(RETRY_TIME)
-        else:
-            ...
 
 
 if __name__ == '__main__':
