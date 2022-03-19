@@ -100,11 +100,14 @@ def check_response(response):
 
 def parse_status(homework):
     """Отслеживание статуса домашней работы."""
-    homework_name = homework.get('homework_name')
-    homework_status = homework.get('status')
     if 'homework_name' not in homework:
         logger.error('Отсутствует ожидаемый ключ "homework_name"')
         raise KeyError('Отсутствует ожидаемый ключ "homework_name"')
+    homework_name = homework.get('homework_name')
+    if homework_name is None or homework_name == '':
+        logger.error('Отсутствует название работы')
+        raise ValueError('Отсутствует название работы')
+    homework_status = homework.get('status')
     if homework_status not in HOMEWORK_STATUSES:
         logger.error('Неизвестный статус работы')
         raise KeyError('Неизвестный статус работы')
@@ -134,13 +137,12 @@ def main():
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
+            current_status = homeworks[0].get('status')
             if len(homeworks) == 0:
                 logger.info('Работа пока не принята на проверку')
-            if status_homework != homeworks[0].get('status'):
+            if status_homework != current_status:
                 send_message(bot, parse_status(homeworks[0]))
-                # не поняла замечание про выборку статусов.
-                # здесь предполагается не проверка, а сравнение,
-                # чтобы понять, что статус изменился
+                status_homework = current_status
             else:
                 logger.debug('Пока без изменений')
             current_timestamp = response['current_date']
